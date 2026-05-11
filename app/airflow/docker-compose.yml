@@ -1,0 +1,97 @@
+version: '3'
+
+x-airflow-common:
+  &airflow-common
+  image: apache/airflow:2.10.2
+  environment:
+    - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+    - AIRFLOW__CORE__FERNET_KEY=FB0o_zt4e3Ziq3LdUUO7F2Z95cvFFx16hU8jTeR1ASM=
+    - AIRFLOW__CORE__LOAD_EXAMPLES=False
+    - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://postgres:postgres@postgres:5432/airflow
+    - AIRFLOW__LOGGING__LOGGING_LEVEL=INFO
+  volumes:
+    - ./dags:/opt/airflow/dags
+    - ./airflow-data/:/opt/airflow/
+  depends_on:
+    - postgres
+
+services:
+  postgres:
+    image: postgres:12
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=airflow
+    volumes:
+      - ./postgres-init:/docker-entrypoint-initdb.d   # optional: init scripts
+    ports:
+      - "5432:5432"
+
+  # One-time initialisation to create the mlflow database
+  mlflow-db-init:
+    image: postgres:12
+    depends_on:
+      - postgres
+    environment:
+      - PGPASSWORD=postgres
+    command: >
+      bash -c "
+        until pg_isready -h postgres -U postgres; do sleep 1; done;
+        psql -h postgres -U postgres -tc 'SELECT 1 FROM pg_database WHERE datname = ''mlflow''' | grep -q 1 || psql -h postgres -U postgres -c 'CREATE DATABASE mlflow';
+      "
+    restart: on-failure
+
+  mlflow:
+    image: apache/airflow:2.8.1-python3.11   # ensure mlflow is installed (or build custom image)
+    command: >
+      bash -c "
+        pip install mlflow psycopg2-binary &&
+        mlflow server \
+          --backend-store-uri postgresql://postgres:postgres@postgres:5432/mlflow \
+          --default-artifact-root /opt/mlflow/artifacts \
+          --host 0.0.0.0 \
+          --port 5000 \
+          --workers 4
+      "
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./mlflow_artifacts:/opt/mlflow/artifacts
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+    depends_on:
+      - postgres
+      - mlflow-db-init
+    restart: always
+
+  airflow-init:
+    <<: *airflow-common
+    container_name: airflow_init
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - if airflow users list | grep -q "No data found"; 
+        then ( airflow db init &&
+          airflow users create
+            --role Admin
+            --username airflow
+            --password airflow
+            --email airflow@airflow.com
+            --firstname airflow
+            --lastname airflow )
+        fi
+    restart: on-failure
+
+  airflow-webserver:
+    <<: *airflow-common
+    command: airflow webserver
+    ports:
+      - "8080:8080"
+    container_name: airflow_webserver
+    restart: always
+
+  airflow-scheduler:
+    <<: *airflow-common
+    command: airflow scheduler
+    container_name: airflow_scheduler
+    restart: always
