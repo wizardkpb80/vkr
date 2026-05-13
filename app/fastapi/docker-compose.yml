@@ -1,0 +1,15 @@
+
+services:
+  fastapi:
+    build: ./
+    ports:
+      - "3001:8000"
+    restart: always
+    container_name: fastapi
+    # Временно отключаем проблемные настройки
+    # env_file:
+    #   - .env
+    # extra_hosts:
+    #   - "server-iis:192.168.152.166"
+    # networks:
+    #   - deploy_network

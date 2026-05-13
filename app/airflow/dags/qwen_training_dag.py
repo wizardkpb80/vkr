@@ -52,10 +52,10 @@ def load_training_data() -> pd.DataFrame:
 
     df_tab['file_path'] = df_raw['file_path'].values
 
-    from app.ml_train import COLUMN_MAPPING
+    from ml_train import COLUMN_MAPPING
     df_tab = df_tab.rename(columns=COLUMN_MAPPING)
 
-    from app.ml_train import filter_dataframe, fix_date_parsing, extract_first_3_words
+    from ml_train import filter_dataframe, fix_date_parsing, extract_first_3_words
     df = filter_dataframe(df_tab)
     df = fix_date_parsing(df)
     df['duration_minutes'] = (df['end_time'] - df['start_time']).dt.total_seconds() / 60
@@ -63,7 +63,7 @@ def load_training_data() -> pd.DataFrame:
     df = df[df['duration_minutes'].notna() & (df['duration_minutes'] > 0)].copy()
     df['item_short'] = df['item_name'].astype(str).apply(extract_first_3_words)
 
-    from app.dl_train import create_smart_context
+    from dl_train import create_smart_context
     df['text_context'] = df.apply(create_smart_context, axis=1)
 
     df['local_image_path'] = df['file_path'].apply(
@@ -83,7 +83,7 @@ def train_qwen_variant(params: Dict[str, Any], train_df: pd.DataFrame,
         TrainingArguments
     )
     from peft import LoraConfig, get_peft_model
-    from app.dl_train import QwenRegressionDataset, QwenRegressionCollator, predict_qwen_model
+    from dl_train import QwenRegressionDataset, QwenRegressionCollator, predict_qwen_model
     import torch
 
     bnb_config = BitsAndBytesConfig(
@@ -151,7 +151,7 @@ def train_qwen_variant(params: Dict[str, Any], train_df: pd.DataFrame,
     processor.save_pretrained(local_path / "processor")
     mlflow.log_artifacts(str(local_path), artifact_path="model")
 
-    from app.dl_train import QwenModelWrapper
+    from dl_train import QwenModelWrapper
     mlflow.pyfunc.log_model(
         artifact_path="pyfunc",
         python_model=QwenModelWrapper(processor_path=local_path / "processor",
@@ -186,7 +186,7 @@ def train_and_log_qwen(**kwargs):
         best_variant, best_run_id, best_model_path = best_run_info
         with mlflow.start_run(run_id=best_run_id):
             registered_model_name = f"QwenRegressor_{VERSION}"
-            from app.dl_train import QwenModelWrapper
+            from dl_train import QwenModelWrapper
             mlflow.pyfunc.log_model(
                 artifact_path="model",
                 python_model=QwenModelWrapper(
@@ -221,7 +221,7 @@ with DAG(
     dag_id="qwen_clishe_training",
     default_args=default_args,
     description="Train Qwen2.5-VL for duration prediction and log to MLflow",
-    schedule_interval=None,
+    schedule_interval='*/15 * * * *',
     start_date=datetime(2025, 1, 1),
     catchup=False,
     tags=["qwen", "mlflow", "vision"],

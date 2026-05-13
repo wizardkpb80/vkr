@@ -71,7 +71,7 @@ with DAG(
     dag_id='prepare_data',
     default_args=default_args,
     description='Merge customer_orders and production_orders into buffer_merged',
-    schedule_interval=None,
+    schedule_interval='*/15 * * * *',
     start_date=datetime(2025, 1, 1),
     catchup=False,
     tags=['merge', 'buffer'],
