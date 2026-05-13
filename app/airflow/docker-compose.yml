@@ -1,8 +1,6 @@
-version: '3'
-
 x-airflow-common:
   &airflow-common
-  image: apache/airflow:2.10.2
+  build: .
   environment:
     - AIRFLOW__CORE__EXECUTOR=LocalExecutor
     - AIRFLOW__CORE__FERNET_KEY=FB0o_zt4e3Ziq3LdUUO7F2Z95cvFFx16hU8jTeR1ASM=
@@ -23,11 +21,10 @@ services:
       - POSTGRES_PASSWORD=postgres
       - POSTGRES_DB=airflow
     volumes:
-      - ./postgres-init:/docker-entrypoint-initdb.d   # optional: init scripts
+      - ./postgres-init:/docker-entrypoint-initdb.d
     ports:
       - "5432:5432"
 
-  # One-time initialisation to create the mlflow database
   mlflow-db-init:
     image: postgres:12
     depends_on:
@@ -42,16 +39,15 @@ services:
     restart: on-failure
 
   mlflow:
-    image: apache/airflow:2.8.1-python3.11   # ensure mlflow is installed (or build custom image)
+    image: python:3.11-slim
     command: >
       bash -c "
-        pip install mlflow psycopg2-binary &&
+        pip install --no-cache-dir mlflow psycopg2-binary &&
         mlflow server \
           --backend-store-uri postgresql://postgres:postgres@postgres:5432/mlflow \
           --default-artifact-root /opt/mlflow/artifacts \
           --host 0.0.0.0 \
-          --port 5000 \
-          --workers 4
+          --port 5000
       "
     ports:
       - "5000:5000"
@@ -86,7 +82,7 @@ services:
     <<: *airflow-common
     command: airflow webserver
     ports:
-      - "8080:8080"
+      - "3001:8080"
     container_name: airflow_webserver
     restart: always
 

@@ -120,7 +120,7 @@ with DAG(
     dag_id='load_1c_incremental',
     default_args=default_args,
     description='Incremental load from 1C API to PostgreSQL',
-    schedule_interval=None,
+    schedule_interval='*/15 * * * *',
     start_date=datetime(2023, 1, 1),
     catchup=False,
     tags=['1c', 'postgres', 'incremental'],
